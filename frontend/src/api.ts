@@ -1,0 +1,83 @@
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api';
+
+export type Role = 'user' | 'admin';
+
+export interface User {
+  _id: string;
+  name: string;
+  email: string;
+  role: Role;
+  interests: string[];
+}
+
+export interface Note {
+  _id: string;
+  title: string;
+  content: string;
+  owner: string | { _id: string; name: string; email: string };
+  updatedAt: string;
+}
+
+export interface Post {
+  _id: string;
+  title: string;
+  body: string;
+  author?: { _id: string; name: string } | null;
+  createdAt: string;
+}
+
+export interface InterestGroup {
+  interest: string;
+  count: number;
+  users: { _id: string; name: string }[];
+}
+
+export interface Page<T> {
+  data: T[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+}
+
+let token = localStorage.getItem('token');
+
+export function setToken(value: string | null) {
+  token = value;
+  if (value) localStorage.setItem('token', value);
+  else localStorage.removeItem('token');
+}
+
+export const hasToken = () => Boolean(token);
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+  ) {
+    super(message);
+  }
+}
+
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(API_URL + path, {
+    method,
+    headers: {
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (res.status === 204) return undefined as T;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = Array.isArray(data.message) ? data.message.join(', ') : data.message;
+    throw new ApiError(message ?? 'Something went wrong', res.status);
+  }
+  return data;
+}
+
+export const api = {
+  get: <T>(path: string) => request<T>('GET', path),
+  post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
+  patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
+  delete: (path: string) => request<void>('DELETE', path),
+};
