@@ -110,8 +110,12 @@ export default function PostsPage({ user, authorId, onSelectAuthor }: Props) {
 
       <div className="feed">
         {result?.data.map((post) => {
-          const postAuthor = post.author ?? author;
-          const mine = postAuthor?._id === user._id;
+          const postAuthor =
+            post.author && typeof post.author === 'object' && 'name' in post.author
+              ? (post.author as { _id: string; name: string })
+              : author;
+          const authorIdStr = typeof post.author === 'string' ? post.author : (postAuthor?._id ?? '');
+          const mine = authorIdStr === user._id;
           return (
             <article key={post._id} className="post">
               <div className="post-meta">

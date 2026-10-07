@@ -6,13 +6,17 @@ interface Props {
 }
 
 export default function Avatar({ name, size = 'md' }: Props) {
-  const hash = [...name].reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
-  const initials = name
-    .split(/\s+/)
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+  const safeName = typeof name === 'string' ? name : '';
+  const hash = [...safeName].reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+  const initials = (
+    safeName
+      .trim()
+      .split(/\s+/)
+      .map((part) => part[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('') || '?'
+  ).toUpperCase();
 
   return (
     <span className={`avatar ${size}`} style={{ background: tones[hash % tones.length] }} aria-hidden>

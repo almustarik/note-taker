@@ -22,7 +22,7 @@ export interface Post {
   _id: string;
   title: string;
   body: string;
-  author?: { _id: string; name: string } | null;
+  author?: string | { _id: string; name: string } | null;
   createdAt: string;
 }
 
