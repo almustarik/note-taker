@@ -4,6 +4,8 @@ import bcrypt from 'bcryptjs';
 import { UsersService } from '../users/users.service.js';
 import { LoginDto, RegisterDto } from './dto/auth.dto.js';
 
+const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10);
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -18,7 +20,10 @@ export class AuthService {
 
   async login({ email, password }: LoginDto) {
     const user = await this.usersService.findByEmailWithPassword(email);
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    // compare against a dummy hash when the email doesn't exist, so the response time
+    // doesn't reveal which emails are registered
+    const valid = await bcrypt.compare(password, user?.password ?? DUMMY_HASH);
+    if (!user || !valid) {
       throw new UnauthorizedException('Invalid email or password');
     }
     const { password: _hash, ...safeUser } = user;

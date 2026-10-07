@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsArray, IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { PaginationDto } from '../../common/pagination.js';
 import { Role } from '../../common/role.enum.js';
 import { toInterests, toLower } from '../../common/transforms.js';
@@ -7,10 +7,12 @@ import { toInterests, toLower } from '../../common/transforms.js';
 export class CreateUserDto {
   @IsString()
   @IsNotEmpty()
+  @MaxLength(100)
   name: string;
 
   @Transform(toLower)
   @IsEmail()
+  @MaxLength(254)
   email: string;
 
   @IsString()
@@ -25,7 +27,9 @@ export class CreateUserDto {
   @IsOptional()
   @Transform(toInterests)
   @IsArray()
+  @ArrayMaxSize(20)
   @IsString({ each: true })
+  @MaxLength(50, { each: true })
   interests?: string[];
 }
 
@@ -33,11 +37,13 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
+  @MaxLength(100)
   name?: string;
 
   @IsOptional()
   @Transform(toLower)
   @IsEmail()
+  @MaxLength(254)
   email?: string;
 
   @IsOptional()
@@ -53,7 +59,9 @@ export class UpdateUserDto {
   @IsOptional()
   @Transform(toInterests)
   @IsArray()
+  @ArrayMaxSize(20)
   @IsString({ each: true })
+  @MaxLength(50, { each: true })
   interests?: string[];
 }
 
@@ -67,5 +75,6 @@ export class InterestsQueryDto extends PaginationDto {
       .filter(Boolean),
   )
   @IsArray()
+  @ArrayMaxSize(20)
   interest?: string[];
 }
