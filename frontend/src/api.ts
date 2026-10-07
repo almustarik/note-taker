@@ -1,4 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api';
+const rawApiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api').trim().replace(/\/+$/, '');
+const API_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
 
 export type Role = 'user' | 'admin';
 
