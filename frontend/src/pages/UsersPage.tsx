@@ -4,39 +4,66 @@ import Avatar from '../components/Avatar';
 import Pager from '../components/Pager';
 import { usePaged } from '../components/usePaged';
 
-const emptyForm = { name: '', email: '', password: '', role: 'user' as Role };
+interface UsersPageProps {
+  currentUser: User;
+}
 
-export default function UsersPage({ currentUser }: { currentUser: User }) {
-  const { result, error, setPage, reload } = usePaged<User>('/users');
-  const [form, setForm] = useState(emptyForm);
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState<User | null>(null);
-  const [actionError, setActionError] = useState('');
+interface CreateUserFormValues {
+  name: string;
+  email: string;
+  password: string;
+  role: Role;
+}
 
-  async function run(action: () => Promise<unknown>) {
+const initialCreateUserFormValues: CreateUserFormValues = {
+  name: '',
+  email: '',
+  password: '',
+  role: 'user',
+};
+
+export default function UsersPage({ currentUser }: UsersPageProps) {
+  const {
+    result: paginatedUsersResult,
+    error: usersFetchErrorMessage,
+    setPage: setUsersCurrentPage,
+    reload: reloadUsersList,
+  } = usePaged<User>('/users');
+
+  const [createUserFormData, setCreateUserFormData] =
+    useState<CreateUserFormValues>(initialCreateUserFormValues);
+  const [isCreateUserFormVisible, setIsCreateUserFormVisible] = useState<boolean>(false);
+  const [editingUserTarget, setEditingUserTarget] = useState<User | null>(null);
+  const [userOperationErrorMessage, setUserOperationErrorMessage] = useState<string>('');
+
+  async function executeUserManagementTask(mutationTask: () => Promise<unknown>) {
     try {
-      setActionError('');
-      await action();
-      await reload();
-    } catch (err) {
-      setActionError((err as Error).message);
+      setUserOperationErrorMessage('');
+      await mutationTask();
+      await reloadUsersList();
+    } catch (caughtError) {
+      setUserOperationErrorMessage((caughtError as Error).message);
     }
   }
 
-  function addUser(e: FormEvent) {
-    e.preventDefault();
-    run(async () => {
-      await api.post('/users', form);
-      setForm(emptyForm);
-      setShowForm(false);
+  function handleCreateNewUserSubmit(event: FormEvent) {
+    event.preventDefault();
+    executeUserManagementTask(async () => {
+      await api.post('/users', createUserFormData);
+      setCreateUserFormData(initialCreateUserFormValues);
+      setIsCreateUserFormVisible(false);
     });
   }
 
-  function saveEdit() {
-    if (!editing) return;
-    run(async () => {
-      await api.patch(`/users/${editing._id}`, { name: editing.name, email: editing.email, role: editing.role });
-      setEditing(null);
+  function handleSaveEditedUserSubmit() {
+    if (!editingUserTarget) return;
+    executeUserManagementTask(async () => {
+      await api.patch(`/users/${editingUserTarget._id}`, {
+        name: editingUserTarget.name,
+        email: editingUserTarget.email,
+        role: editingUserTarget.role,
+      });
+      setEditingUserTarget(null);
     });
   }
 
@@ -45,37 +72,65 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
       <header className="page-header">
         <div>
           <h1>Users</h1>
-          {result && <p className="subtitle">{result.pagination.total} accounts</p>}
+          {paginatedUsersResult && (
+            <p className="subtitle">{paginatedUsersResult.pagination.total} accounts</p>
+          )}
         </div>
-        <button className="button primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Close' : 'Add user'}
+        <button
+          className="button primary"
+          onClick={() => setIsCreateUserFormVisible(!isCreateUserFormVisible)}
+        >
+          {isCreateUserFormVisible ? 'Close' : 'Add user'}
         </button>
       </header>
 
-      {showForm && (
-        <form className="panel grid-form" onSubmit={addUser}>
+      {isCreateUserFormVisible && (
+        <form className="panel grid-form" onSubmit={handleCreateNewUserSubmit}>
           <h2 className="form-title">New user</h2>
           <label>
             Name
-            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+            <input
+              value={createUserFormData.name}
+              onChange={(event) =>
+                setCreateUserFormData({ ...createUserFormData, name: event.target.value })
+              }
+              required
+            />
           </label>
           <label>
             Email
-            <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+            <input
+              type="email"
+              value={createUserFormData.email}
+              onChange={(event) =>
+                setCreateUserFormData({ ...createUserFormData, email: event.target.value })
+              }
+              required
+            />
           </label>
           <label>
             Password
             <input
               type="password"
               minLength={8}
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              value={createUserFormData.password}
+              onChange={(event) =>
+                setCreateUserFormData({ ...createUserFormData, password: event.target.value })
+              }
               required
             />
           </label>
           <label>
             Role
-            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })}>
+            <select
+              value={createUserFormData.role}
+              onChange={(event) =>
+                setCreateUserFormData({
+                  ...createUserFormData,
+                  role: event.target.value as Role,
+                })
+              }
+            >
               <option value="user">User</option>
               <option value="admin">Admin</option>
             </select>
@@ -86,7 +141,9 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
         </form>
       )}
 
-      {(error || actionError) && <p className="error">{error || actionError}</p>}
+      {(usersFetchErrorMessage || userOperationErrorMessage) && (
+        <p className="error">{usersFetchErrorMessage || userOperationErrorMessage}</p>
+      )}
 
       <div className="panel table-wrap">
         <table className="table">
@@ -100,59 +157,80 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
             </tr>
           </thead>
           <tbody>
-            {result?.data.map((u) =>
-              editing?._id === u._id ? (
-                <tr key={u._id}>
+            {paginatedUsersResult?.data.map((listedUser) =>
+              editingUserTarget?._id === listedUser._id ? (
+                <tr key={listedUser._id}>
                   <td>
-                    <input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
+                    <input
+                      value={editingUserTarget.name}
+                      onChange={(event) =>
+                        setEditingUserTarget({ ...editingUserTarget, name: event.target.value })
+                      }
+                    />
                   </td>
                   <td>
-                    <input value={editing.email} onChange={(e) => setEditing({ ...editing, email: e.target.value })} />
+                    <input
+                      value={editingUserTarget.email}
+                      onChange={(event) =>
+                        setEditingUserTarget({ ...editingUserTarget, email: event.target.value })
+                      }
+                    />
                   </td>
                   <td>
                     <select
-                      value={editing.role}
-                      disabled={u._id === currentUser._id}
-                      onChange={(e) => setEditing({ ...editing, role: e.target.value as Role })}
+                      value={editingUserTarget.role}
+                      disabled={listedUser._id === currentUser._id}
+                      onChange={(event) =>
+                        setEditingUserTarget({
+                          ...editingUserTarget,
+                          role: event.target.value as Role,
+                        })
+                      }
                     >
                       <option value="user">User</option>
                       <option value="admin">Admin</option>
                     </select>
                   </td>
-                  <td className="muted">{u.interests.join(', ')}</td>
+                  <td className="muted">{listedUser.interests.join(', ')}</td>
                   <td className="actions">
-                    <button className="link" onClick={saveEdit}>
+                    <button className="link" onClick={handleSaveEditedUserSubmit}>
                       Save
                     </button>
-                    <button className="link" onClick={() => setEditing(null)}>
+                    <button className="link" onClick={() => setEditingUserTarget(null)}>
                       Cancel
                     </button>
                   </td>
                 </tr>
               ) : (
-                <tr key={u._id}>
+                <tr key={listedUser._id}>
                   <td>
                     <span className="user-cell">
-                      <Avatar name={u.name} size="sm" />
-                      {u.name}
-                      {u._id === currentUser._id && <span className="muted small">(you)</span>}
+                      <Avatar name={listedUser.name} size="sm" />
+                      {listedUser.name}
+                      {listedUser._id === currentUser._id && (
+                        <span className="muted small">(you)</span>
+                      )}
                     </span>
                   </td>
-                  <td className="muted">{u.email}</td>
+                  <td className="muted">{listedUser.email}</td>
                   <td>
-                    <span className={u.role === 'admin' ? 'pill admin' : 'pill'}>{u.role === 'admin' ? 'Admin' : 'User'}</span>
+                    <span className={listedUser.role === 'admin' ? 'pill admin' : 'pill'}>
+                      {listedUser.role === 'admin' ? 'Admin' : 'User'}
+                    </span>
                   </td>
-                  <td className="muted">{u.interests.join(', ') || '–'}</td>
+                  <td className="muted">{listedUser.interests.join(', ') || '–'}</td>
                   <td className="actions">
-                    <button className="link" onClick={() => setEditing(u)}>
+                    <button className="link" onClick={() => setEditingUserTarget(listedUser)}>
                       Edit
                     </button>
-                    {u._id !== currentUser._id && (
+                    {listedUser._id !== currentUser._id && (
                       <button
                         className="link danger"
                         onClick={() =>
-                          confirm(`Remove ${u.name}? Their notes and posts will be deleted too.`) &&
-                          run(() => api.delete(`/users/${u._id}`))
+                          confirm(
+                            `Remove ${listedUser.name}? Their notes and posts will be deleted too.`,
+                          ) &&
+                          executeUserManagementTask(() => api.delete(`/users/${listedUser._id}`))
                         }
                       >
                         Remove
@@ -166,7 +244,12 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
         </table>
       </div>
 
-      {result && <Pager pagination={result.pagination} onChange={setPage} />}
+      {paginatedUsersResult && (
+        <Pager
+          pagination={paginatedUsersResult.pagination}
+          onChange={setUsersCurrentPage}
+        />
+      )}
     </section>
   );
 }

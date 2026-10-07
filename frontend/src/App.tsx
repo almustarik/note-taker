@@ -8,88 +8,116 @@ import NotesPage from './pages/NotesPage';
 import PostsPage from './pages/PostsPage';
 import UsersPage from './pages/UsersPage';
 
-type Tab = 'notes' | 'posts' | 'interests' | 'users';
+type NavigationTabIdentifier = 'notes' | 'posts' | 'interests' | 'users';
+
+interface NavigationTabConfig {
+  id: NavigationTabIdentifier;
+  label: string;
+  icon: ReactNode;
+}
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(hasToken());
-  const [tab, setTab] = useState<Tab>('notes');
-  const [postsAuthor, setPostsAuthor] = useState<string | null>(null);
+  const [authenticatedUser, setAuthenticatedUser] = useState<User | null>(null);
+  const [isInitialAuthLoading, setIsInitialAuthLoading] = useState<boolean>(hasToken());
+  const [activeNavigationTab, setActiveNavigationTab] =
+    useState<NavigationTabIdentifier>('notes');
+  const [selectedPostsAuthorIdFilter, setSelectedPostsAuthorIdFilter] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!hasToken()) return;
     api
       .get<User>('/auth/me')
-      .then(setUser)
+      .then((userProfile) => setAuthenticatedUser(userProfile))
       .catch(() => setToken(null))
-      .finally(() => setLoading(false));
+      .finally(() => setIsInitialAuthLoading(false));
   }, []);
 
-  function handleLogin(token: string, user: User) {
-    setToken(token);
-    setUser(user);
-    setTab('notes');
+  function handleUserLoginSuccess(authToken: string, loggedInUser: User) {
+    setToken(authToken);
+    setAuthenticatedUser(loggedInUser);
+    setActiveNavigationTab('notes');
   }
 
-  function logout() {
+  function handleUserLogout() {
     setToken(null);
-    setUser(null);
+    setAuthenticatedUser(null);
   }
 
-  function showPostsBy(authorId: string) {
-    setPostsAuthor(authorId);
-    setTab('posts');
+  function handleNavigateToAuthorPosts(targetAuthorId: string) {
+    setSelectedPostsAuthorIdFilter(targetAuthorId);
+    setActiveNavigationTab('posts');
   }
 
-  if (loading) return null;
-  if (!user) return <AuthPage onLogin={handleLogin} />;
+  if (isInitialAuthLoading) return null;
+  if (!authenticatedUser) return <AuthPage onLogin={handleUserLoginSuccess} />;
 
-  const tabs: { id: Tab; label: string; icon: ReactNode }[] = [
+  const availableNavigationTabs: NavigationTabConfig[] = [
     { id: 'notes', label: 'My notes', icon: <NoteIcon /> },
     { id: 'posts', label: 'Posts', icon: <FeedIcon /> },
     { id: 'interests', label: 'Interests', icon: <TagIcon /> },
   ];
-  if (user.role === 'admin') tabs.push({ id: 'users', label: 'Users', icon: <UsersIcon /> });
+  if (authenticatedUser.role === 'admin') {
+    availableNavigationTabs.push({ id: 'users', label: 'Users', icon: <UsersIcon /> });
+  }
 
   return (
     <div className="layout">
       <aside className="sidebar">
         <div className="brand">Notes</div>
         <nav>
-          {tabs.map((t) => (
+          {availableNavigationTabs.map((navigationTab) => (
             <button
-              key={t.id}
-              className={tab === t.id ? 'nav-item active' : 'nav-item'}
+              key={navigationTab.id}
+              className={activeNavigationTab === navigationTab.id ? 'nav-item active' : 'nav-item'}
               onClick={() => {
-                setTab(t.id);
-                if (t.id === 'posts') setPostsAuthor(null);
+                setActiveNavigationTab(navigationTab.id);
+                if (navigationTab.id === 'posts') setSelectedPostsAuthorIdFilter(null);
               }}
             >
-              {t.icon}
-              <span>{t.label}</span>
+              {navigationTab.icon}
+              <span>{navigationTab.label}</span>
             </button>
           ))}
         </nav>
         <div className="account">
-          <Avatar name={user.name} />
+          <Avatar name={authenticatedUser.name} />
           <div className="account-info">
             <div className="account-name">
-              {user.name}
-              {user.role === 'admin' && <span className="badge">Admin</span>}
+              {authenticatedUser.name}
+              {authenticatedUser.role === 'admin' && <span className="badge">Admin</span>}
             </div>
-            <div className="account-email">{user.email}</div>
+            <div className="account-email">{authenticatedUser.email}</div>
           </div>
-          <button className="icon-button" onClick={logout} title="Log out" aria-label="Log out">
+          <button
+            className="icon-button"
+            onClick={handleUserLogout}
+            title="Log out"
+            aria-label="Log out"
+          >
             <LogoutIcon />
           </button>
         </div>
       </aside>
 
       <main className="content">
-        {tab === 'notes' && <NotesPage user={user} />}
-        {tab === 'posts' && <PostsPage user={user} authorId={postsAuthor} onSelectAuthor={setPostsAuthor} />}
-        {tab === 'interests' && <InterestsPage user={user} onUserChange={setUser} onSelectUser={showPostsBy} />}
-        {tab === 'users' && <UsersPage currentUser={user} />}
+        {activeNavigationTab === 'notes' && <NotesPage user={authenticatedUser} />}
+        {activeNavigationTab === 'posts' && (
+          <PostsPage
+            user={authenticatedUser}
+            authorId={selectedPostsAuthorIdFilter}
+            onSelectAuthor={setSelectedPostsAuthorIdFilter}
+          />
+        )}
+        {activeNavigationTab === 'interests' && (
+          <InterestsPage
+            user={authenticatedUser}
+            onUserChange={setAuthenticatedUser}
+            onSelectUser={handleNavigateToAuthorPosts}
+          />
+        )}
+        {activeNavigationTab === 'users' && <UsersPage currentUser={authenticatedUser} />}
       </main>
     </div>
   );

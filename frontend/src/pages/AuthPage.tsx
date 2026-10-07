@@ -1,38 +1,60 @@
 import { useState, type FormEvent } from 'react';
 import { api, type User } from '../api';
 
-interface Props {
-  onLogin: (token: string, user: User) => void;
+interface AuthPageProps {
+  onLogin: (authToken: string, authenticatedUser: User) => void;
 }
 
-export default function AuthPage({ onLogin }: Props) {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [form, setForm] = useState({ name: '', email: '', password: '', interests: '' });
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+interface AuthFormState {
+  name: string;
+  email: string;
+  password: string;
+  interests: string;
+}
 
-  const update = (field: keyof typeof form) => (e: { target: { value: string } }) =>
-    setForm({ ...form, [field]: e.target.value });
+const initialAuthFormValues: AuthFormState = {
+  name: '',
+  email: '',
+  password: '',
+  interests: '',
+};
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError('');
+export default function AuthPage({ onLogin }: AuthPageProps) {
+  const [authenticationMode, setAuthenticationMode] = useState<'login' | 'register'>('login');
+  const [authFormState, setAuthFormState] = useState<AuthFormState>(initialAuthFormValues);
+  const [authErrorMessage, setAuthErrorMessage] = useState<string>('');
+  const [isSubmittingAuthRequest, setIsSubmittingAuthRequest] = useState<boolean>(false);
+
+  const handleFormFieldChange =
+    (fieldName: keyof AuthFormState) => (event: { target: { value: string } }) => {
+      setAuthFormState({ ...authFormState, [fieldName]: event.target.value });
+    };
+
+  async function handleAuthenticationFormSubmit(event: FormEvent) {
+    event.preventDefault();
+    setIsSubmittingAuthRequest(true);
+    setAuthErrorMessage('');
     try {
-      const res =
-        mode === 'login'
-          ? await api.post<{ token: string; user: User }>('/auth/login', { email: form.email, password: form.password })
+      const response =
+        authenticationMode === 'login'
+          ? await api.post<{ token: string; user: User }>('/auth/login', {
+              email: authFormState.email,
+              password: authFormState.password,
+            })
           : await api.post<{ token: string; user: User }>('/auth/register', {
-              name: form.name,
-              email: form.email,
-              password: form.password,
-              interests: form.interests.split(',').map((s) => s.trim()).filter(Boolean),
+              name: authFormState.name,
+              email: authFormState.email,
+              password: authFormState.password,
+              interests: authFormState.interests
+                .split(',')
+                .map((interestSegment) => interestSegment.trim())
+                .filter(Boolean),
             });
-      onLogin(res.token, res.user);
-    } catch (err) {
-      setError((err as Error).message);
+      onLogin(response.token, response.user);
+    } catch (caughtError) {
+      setAuthErrorMessage((caughtError as Error).message);
     } finally {
-      setBusy(false);
+      setIsSubmittingAuthRequest(false);
     }
   }
 
@@ -53,61 +75,82 @@ export default function AuthPage({ onLogin }: Props) {
           </ul>
         </div>
 
-        <p>Keep your notes private, share posts with everyone, and find people who like the same things you do.</p>
+        <p>
+          Keep your notes private, share posts with everyone, and find people who like the same things you do.
+        </p>
       </div>
 
       <div className="auth-main">
-        <form className="auth-form" onSubmit={submit}>
-          <h1>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
+        <form className="auth-form" onSubmit={handleAuthenticationFormSubmit}>
+          <h1>{authenticationMode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
           <p className="muted lead">
-            {mode === 'login' ? 'Log in to see your notes.' : 'It only takes a minute.'}
+            {authenticationMode === 'login' ? 'Log in to see your notes.' : 'It only takes a minute.'}
           </p>
 
-          {mode === 'register' && (
+          {authenticationMode === 'register' && (
             <label>
               Name
-              <input value={form.name} onChange={update('name')} autoComplete="name" required />
+              <input
+                value={authFormState.name}
+                onChange={handleFormFieldChange('name')}
+                autoComplete="name"
+                required
+              />
             </label>
           )}
           <label>
             Email
-            <input type="email" value={form.email} onChange={update('email')} autoComplete="email" required />
+            <input
+              type="email"
+              value={authFormState.email}
+              onChange={handleFormFieldChange('email')}
+              autoComplete="email"
+              required
+            />
           </label>
           <label>
             Password
             <input
               type="password"
-              value={form.password}
-              onChange={update('password')}
-              minLength={mode === 'register' ? 8 : undefined}
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+              value={authFormState.password}
+              onChange={handleFormFieldChange('password')}
+              minLength={authenticationMode === 'register' ? 8 : undefined}
+              autoComplete={authenticationMode === 'login' ? 'current-password' : 'new-password'}
               required
             />
           </label>
-          {mode === 'register' && (
+          {authenticationMode === 'register' && (
             <label>
               Interests <span className="muted hint">optional, separate with commas</span>
-              <input value={form.interests} onChange={update('interests')} placeholder="chess, reading" />
+              <input
+                value={authFormState.interests}
+                onChange={handleFormFieldChange('interests')}
+                placeholder="chess, reading"
+              />
             </label>
           )}
 
-          {error && <p className="error">{error}</p>}
+          {authErrorMessage && <p className="error">{authErrorMessage}</p>}
 
-          <button className="button primary large" disabled={busy}>
-            {busy ? 'Please wait…' : mode === 'login' ? 'Log in' : 'Create account'}
+          <button className="button primary large" disabled={isSubmittingAuthRequest}>
+            {isSubmittingAuthRequest
+              ? 'Please wait…'
+              : authenticationMode === 'login'
+                ? 'Log in'
+                : 'Create account'}
           </button>
 
           <p className="muted switch">
-            {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
+            {authenticationMode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
             <button
               type="button"
               className="link"
               onClick={() => {
-                setMode(mode === 'login' ? 'register' : 'login');
-                setError('');
+                setAuthenticationMode(authenticationMode === 'login' ? 'register' : 'login');
+                setAuthErrorMessage('');
               }}
             >
-              {mode === 'login' ? 'Sign up' : 'Log in'}
+              {authenticationMode === 'login' ? 'Sign up' : 'Log in'}
             </button>
           </p>
         </form>

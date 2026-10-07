@@ -1,23 +1,38 @@
 import type { Page } from '../api';
 
-interface Props {
+interface PagerComponentProps {
   pagination: Page<unknown>['pagination'];
-  onChange: (page: number) => void;
+  onChange: (targetPageNumber: number) => void;
 }
 
-export default function Pager({ pagination, onChange }: Props) {
-  const { page, totalPages, total } = pagination;
-  if (totalPages <= 1) return null;
+export default function Pager({ pagination, onChange }: PagerComponentProps) {
+  const { page: currentPageNumber, totalPages: totalAvailablePages, total: totalRecordsCount } = pagination;
+
+  if (totalAvailablePages <= 1) {
+    return null;
+  }
+
+  const hasPreviousPage = currentPageNumber > 1;
+  const hasNextPage = currentPageNumber < totalAvailablePages;
 
   return (
     <div className="pager">
-      <button className="button ghost" disabled={page <= 1} onClick={() => onChange(page - 1)}>
+      <button
+        className="button ghost"
+        disabled={!hasPreviousPage}
+        onClick={() => onChange(currentPageNumber - 1)}
+      >
         Previous
       </button>
       <span>
-        Page {page} of {totalPages} <span className="muted">({total} total)</span>
+        Page {currentPageNumber} of {totalAvailablePages}{' '}
+        <span className="muted">({totalRecordsCount} total)</span>
       </span>
-      <button className="button ghost" disabled={page >= totalPages} onClick={() => onChange(page + 1)}>
+      <button
+        className="button ghost"
+        disabled={!hasNextPage}
+        onClick={() => onChange(currentPageNumber + 1)}
+      >
         Next
       </button>
     </div>

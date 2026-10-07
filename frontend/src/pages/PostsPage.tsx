@@ -4,70 +4,88 @@ import Avatar from '../components/Avatar';
 import Pager from '../components/Pager';
 import { usePaged } from '../components/usePaged';
 
-interface Props {
+interface PostsPageProps {
   user: User;
   authorId: string | null;
-  onSelectAuthor: (id: string | null) => void;
+  onSelectAuthor: (authorId: string | null) => void;
 }
 
-type AuthorPosts = Page<Post> & { author: { _id: string; name: string } };
+type UserAggregatedPostsPageResponse = Page<Post> & {
+  author: { _id: string; name: string };
+};
 
-function timeAgo(date: string) {
-  const minutes = Math.round((Date.now() - new Date(date).getTime()) / 60000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return new Date(date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+function formatRelativeTimeAgo(isoDateString: string): string {
+  const elapsedMinutes = Math.round((Date.now() - new Date(isoDateString).getTime()) / 60000);
+  if (elapsedMinutes < 1) return 'just now';
+  if (elapsedMinutes < 60) return `${elapsedMinutes}m ago`;
+  const elapsedHours = Math.round(elapsedMinutes / 60);
+  if (elapsedHours < 24) return `${elapsedHours}h ago`;
+  return new Date(isoDateString).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
-export default function PostsPage({ user, authorId, onSelectAuthor }: Props) {
-  const { result, error, setPage, reload } = usePaged<Post>(authorId ? `/users/${authorId}/posts` : '/posts');
-  const author = authorId ? (result as AuthorPosts | null)?.author : null;
+export default function PostsPage({
+  user: currentUser,
+  authorId: filteredAuthorId,
+  onSelectAuthor,
+}: PostsPageProps) {
+  const {
+    result: paginatedPostsResult,
+    error: postsFetchError,
+    setPage: setPostsCurrentPage,
+    reload: reloadPostsList,
+  } = usePaged<Post>(filteredAuthorId ? `/users/${filteredAuthorId}/posts` : '/posts');
 
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [actionError, setActionError] = useState('');
+  const filteredAuthorProfile = filteredAuthorId
+    ? (paginatedPostsResult as UserAggregatedPostsPageResponse | null)?.author
+    : null;
 
-  async function publish(e: FormEvent) {
-    e.preventDefault();
+  const [newPostTitle, setNewPostTitle] = useState<string>('');
+  const [newPostBody, setNewPostBody] = useState<string>('');
+  const [postOperationErrorMessage, setPostOperationErrorMessage] = useState<string>('');
+
+  async function handleCreatePostSubmit(event: FormEvent) {
+    event.preventDefault();
     try {
-      await api.post('/posts', { title, body });
-      setTitle('');
-      setBody('');
-      setActionError('');
-      await reload();
-    } catch (err) {
-      setActionError((err as Error).message);
+      await api.post('/posts', { title: newPostTitle, body: newPostBody });
+      setNewPostTitle('');
+      setNewPostBody('');
+      setPostOperationErrorMessage('');
+      await reloadPostsList();
+    } catch (caughtError) {
+      setPostOperationErrorMessage((caughtError as Error).message);
     }
   }
 
-  async function remove(post: Post) {
+  async function handleDeletePost(targetPost: Post) {
     if (!confirm('Delete this post?')) return;
     try {
-      await api.delete(`/posts/${post._id}`);
-      await reload();
-    } catch (err) {
-      setActionError((err as Error).message);
+      await api.delete(`/posts/${targetPost._id}`);
+      await reloadPostsList();
+    } catch (caughtError) {
+      setPostOperationErrorMessage((caughtError as Error).message);
     }
   }
 
-  const total = result?.pagination.total ?? 0;
+  const totalPostsCount = paginatedPostsResult?.pagination.total ?? 0;
 
   return (
     <section>
-      {authorId ? (
+      {filteredAuthorId ? (
         <header className="profile-header">
           <button className="button ghost small" onClick={() => onSelectAuthor(null)}>
             Back to all posts
           </button>
-          {author && (
+          {filteredAuthorProfile && (
             <div className="profile">
-              <Avatar name={author.name} size="lg" />
+              <Avatar name={filteredAuthorProfile.name} size="lg" />
               <div>
-                <h1>{author._id === user._id ? 'Your posts' : author.name}</h1>
+                <h1>
+                  {filteredAuthorProfile._id === currentUser._id
+                    ? 'Your posts'
+                    : filteredAuthorProfile.name}
+                </h1>
                 <p className="subtitle">
-                  {total} {total === 1 ? 'post' : 'posts'}
+                  {totalPostsCount} {totalPostsCount === 1 ? 'post' : 'posts'}
                 </p>
               </div>
             </div>
@@ -82,54 +100,81 @@ export default function PostsPage({ user, authorId, onSelectAuthor }: Props) {
         </header>
       )}
 
-      {!authorId && (
-        <form className="composer" onSubmit={publish}>
+      {!filteredAuthorId && (
+        <form className="composer" onSubmit={handleCreatePostSubmit}>
           <div className="composer-row">
-            <Avatar name={user.name} />
+            <Avatar name={currentUser.name} />
             <div className="composer-fields">
-              <input className="composer-title" placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} required />
-              <textarea placeholder="What's on your mind?" rows={2} value={body} onChange={(e) => setBody(e.target.value)} required />
+              <input
+                className="composer-title"
+                placeholder="Title"
+                value={newPostTitle}
+                onChange={(event) => setNewPostTitle(event.target.value)}
+                required
+              />
+              <textarea
+                placeholder="What's on your mind?"
+                rows={2}
+                value={newPostBody}
+                onChange={(event) => setNewPostBody(event.target.value)}
+                required
+              />
             </div>
           </div>
           <div className="composer-actions">
-            <button className="button primary" disabled={!title.trim() || !body.trim()}>
+            <button
+              className="button primary"
+              disabled={!newPostTitle.trim() || !newPostBody.trim()}
+            >
               Publish
             </button>
           </div>
         </form>
       )}
 
-      {(error || actionError) && <p className="error">{error || actionError}</p>}
+      {(postsFetchError || postOperationErrorMessage) && (
+        <p className="error">{postsFetchError || postOperationErrorMessage}</p>
+      )}
 
-      {result && result.data.length === 0 && (
+      {paginatedPostsResult && paginatedPostsResult.data.length === 0 && (
         <div className="empty">
           <p className="empty-title">No posts yet</p>
-          <p>{authorId ? 'Nothing published here so far.' : 'Publish the first one above.'}</p>
+          <p>{filteredAuthorId ? 'Nothing published here so far.' : 'Publish the first one above.'}</p>
         </div>
       )}
 
       <div className="feed">
-        {result?.data.map((post) => {
-          const postAuthor =
+        {paginatedPostsResult?.data.map((post) => {
+          const resolvedPostAuthor =
             post.author && typeof post.author === 'object' && 'name' in post.author
               ? (post.author as { _id: string; name: string })
-              : author;
-          const authorIdStr = typeof post.author === 'string' ? post.author : (postAuthor?._id ?? '');
-          const mine = authorIdStr === user._id;
+              : filteredAuthorProfile;
+          const authorIdString =
+            typeof post.author === 'string' ? post.author : (resolvedPostAuthor?._id ?? '');
+          const isCurrentUserPostAuthor = authorIdString === currentUser._id;
+
           return (
             <article key={post._id} className="post">
               <div className="post-meta">
-                {postAuthor && <Avatar name={postAuthor.name} size="sm" />}
-                {postAuthor && !authorId ? (
-                  <button className="post-author" onClick={() => onSelectAuthor(postAuthor._id)}>
-                    {mine ? 'You' : postAuthor.name}
+                {resolvedPostAuthor && <Avatar name={resolvedPostAuthor.name} size="sm" />}
+                {resolvedPostAuthor && !filteredAuthorId ? (
+                  <button
+                    className="post-author"
+                    onClick={() => onSelectAuthor(resolvedPostAuthor._id)}
+                  >
+                    {isCurrentUserPostAuthor ? 'You' : resolvedPostAuthor.name}
                   </button>
                 ) : (
-                  <span className="post-author static">{postAuthor?.name ?? 'Deleted user'}</span>
+                  <span className="post-author static">
+                    {resolvedPostAuthor?.name ?? 'Deleted user'}
+                  </span>
                 )}
-                <span className="muted small">{timeAgo(post.createdAt)}</span>
-                {mine && (
-                  <button className="link danger small push" onClick={() => remove(post)}>
+                <span className="muted small">{formatRelativeTimeAgo(post.createdAt)}</span>
+                {isCurrentUserPostAuthor && (
+                  <button
+                    className="link danger small push"
+                    onClick={() => handleDeletePost(post)}
+                  >
                     Delete
                   </button>
                 )}
@@ -141,7 +186,9 @@ export default function PostsPage({ user, authorId, onSelectAuthor }: Props) {
         })}
       </div>
 
-      {result && <Pager pagination={result.pagination} onChange={setPage} />}
+      {paginatedPostsResult && (
+        <Pager pagination={paginatedPostsResult.pagination} onChange={setPostsCurrentPage} />
+      )}
     </section>
   );
 }

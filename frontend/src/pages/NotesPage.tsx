@@ -4,88 +4,121 @@ import Avatar from '../components/Avatar';
 import Pager from '../components/Pager';
 import { usePaged } from '../components/usePaged';
 
-const formatDate = (d: string) =>
-  new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+const formatDisplayDate = (dateString: string) =>
+  new Date(dateString).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
-export default function NotesPage({ user }: { user: User }) {
-  const isAdmin = user.role === 'admin';
-  const [showAll, setShowAll] = useState(false);
-  const { result, error, setPage, reload } = usePaged<Note>(showAll ? '/notes?scope=all' : '/notes');
+interface NotesPageProps {
+  user: User;
+}
 
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [editing, setEditing] = useState<Note | null>(null);
-  const [actionError, setActionError] = useState('');
+export default function NotesPage({ user: currentUser }: NotesPageProps) {
+  const isCurrentUserAdmin = currentUser.role === 'admin';
+  const [isViewingAllUsersNotes, setIsViewingAllUsersNotes] = useState<boolean>(false);
+  const {
+    result: paginatedNotesResult,
+    error: notesFetchError,
+    setPage: setNotesCurrentPage,
+    reload: reloadNotesList,
+  } = usePaged<Note>(isViewingAllUsersNotes ? '/notes?scope=all' : '/notes');
 
-  async function run(action: () => Promise<unknown>) {
+  const [newNoteTitle, setNewNoteTitle] = useState<string>('');
+  const [newNoteContent, setNewNoteContent] = useState<string>('');
+  const [editingNoteTarget, setEditingNoteTarget] = useState<Note | null>(null);
+  const [operationErrorMessage, setOperationErrorMessage] = useState<string>('');
+
+  async function executeNoteMutationTask(mutationCallback: () => Promise<unknown>) {
     try {
-      setActionError('');
-      await action();
-      await reload();
-    } catch (err) {
-      setActionError((err as Error).message);
+      setOperationErrorMessage('');
+      await mutationCallback();
+      await reloadNotesList();
+    } catch (caughtError) {
+      setOperationErrorMessage((caughtError as Error).message);
     }
   }
 
-  function addNote(e: FormEvent) {
-    e.preventDefault();
-    run(async () => {
-      await api.post('/notes', { title, content });
-      setTitle('');
-      setContent('');
+  function handleCreateNoteSubmit(event: FormEvent) {
+    event.preventDefault();
+    executeNoteMutationTask(async () => {
+      await api.post('/notes', { title: newNoteTitle, content: newNoteContent });
+      setNewNoteTitle('');
+      setNewNoteContent('');
     });
   }
 
-  function saveEdit(e: FormEvent) {
-    e.preventDefault();
-    if (!editing) return;
-    run(async () => {
-      await api.patch(`/notes/${editing._id}`, { title: editing.title, content: editing.content });
-      setEditing(null);
+  function handleSaveEditedNoteSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!editingNoteTarget) return;
+    executeNoteMutationTask(async () => {
+      await api.patch(`/notes/${editingNoteTarget._id}`, {
+        title: editingNoteTarget.title,
+        content: editingNoteContent,
+      });
+      setEditingNoteTarget(null);
     });
   }
 
-  const ownerId = (n: Note) => (typeof n.owner === 'string' ? n.owner : n.owner._id);
-  const ownerName = (n: Note) => (typeof n.owner === 'string' ? '' : n.owner.name);
-  const total = result?.pagination.total ?? 0;
+  const [editingNoteContent, setEditingNoteContent] = useState<string>('');
+
+  const extractNoteOwnerId = (note: Note) => (typeof note.owner === 'string' ? note.owner : note.owner._id);
+  const extractNoteOwnerName = (note: Note) => (typeof note.owner === 'string' ? '' : note.owner.name);
+  const totalNotesCount = paginatedNotesResult?.pagination.total ?? 0;
 
   return (
     <section>
       <header className="page-header">
         <div>
-          <h1>{showAll ? 'All notes' : 'My notes'}</h1>
-          {result && (
+          <h1>{isViewingAllUsersNotes ? 'All notes' : 'My notes'}</h1>
+          {paginatedNotesResult && (
             <p className="subtitle">
-              {total} {total === 1 ? 'note' : 'notes'}
-              {showAll ? ' across all users' : ''}
+              {totalNotesCount} {totalNotesCount === 1 ? 'note' : 'notes'}
+              {isViewingAllUsersNotes ? ' across all users' : ''}
             </p>
           )}
         </div>
-        {isAdmin && (
+        {isCurrentUserAdmin && (
           <div className="segmented" role="group" aria-label="Whose notes">
-            <button className={!showAll ? 'on' : ''} onClick={() => setShowAll(false)}>
+            <button
+              className={!isViewingAllUsersNotes ? 'on' : ''}
+              onClick={() => setIsViewingAllUsersNotes(false)}
+            >
               Mine
             </button>
-            <button className={showAll ? 'on' : ''} onClick={() => setShowAll(true)}>
+            <button
+              className={isViewingAllUsersNotes ? 'on' : ''}
+              onClick={() => setIsViewingAllUsersNotes(true)}
+            >
               Everyone
             </button>
           </div>
         )}
       </header>
 
-      <form className="composer" onSubmit={addNote}>
-        <input className="composer-title" placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} required />
-        <textarea placeholder="Take a note…" rows={2} value={content} onChange={(e) => setContent(e.target.value)} />
+      <form className="composer" onSubmit={handleCreateNoteSubmit}>
+        <input
+          className="composer-title"
+          placeholder="Title"
+          value={newNoteTitle}
+          onChange={(event) => setNewNoteTitle(event.target.value)}
+          required
+        />
+        <textarea
+          placeholder="Take a note…"
+          rows={2}
+          value={newNoteContent}
+          onChange={(event) => setNewNoteContent(event.target.value)}
+        />
         <div className="composer-actions">
-          <button className="button primary" disabled={!title.trim()}>
+          <button className="button primary" disabled={!newNoteTitle.trim()}>
             Add note
           </button>
         </div>
       </form>
 
-      {(error || actionError) && <p className="error">{error || actionError}</p>}
+      {(notesFetchError || operationErrorMessage) && (
+        <p className="error">{notesFetchError || operationErrorMessage}</p>
+      )}
 
-      {result && result.data.length === 0 && (
+      {paginatedNotesResult && paginatedNotesResult.data.length === 0 && (
         <div className="empty">
           <p className="empty-title">No notes yet</p>
           <p>Write your first one above. Only you can see it.</p>
@@ -93,26 +126,32 @@ export default function NotesPage({ user }: { user: User }) {
       )}
 
       <div className="board">
-        {result?.data.map((note) => {
-          const mine = ownerId(note) === user._id;
+        {paginatedNotesResult?.data.map((note) => {
+          const isCurrentUserNoteOwner = extractNoteOwnerId(note) === currentUser._id;
 
-          if (editing?._id === note._id) {
+          if (editingNoteTarget?._id === note._id) {
             return (
-              <form key={note._id} className="sheet editing" onSubmit={saveEdit}>
+              <form key={note._id} className="sheet editing" onSubmit={handleSaveEditedNoteSubmit}>
                 <input
                   className="sheet-input-title"
-                  value={editing.title}
-                  onChange={(e) => setEditing({ ...editing, title: e.target.value })}
+                  value={editingNoteTarget.title}
+                  onChange={(event) =>
+                    setEditingNoteTarget({ ...editingNoteTarget, title: event.target.value })
+                  }
                   required
                   autoFocus
                 />
                 <textarea
                   rows={5}
-                  value={editing.content}
-                  onChange={(e) => setEditing({ ...editing, content: e.target.value })}
+                  value={editingNoteContent}
+                  onChange={(event) => setEditingNoteContent(event.target.value)}
                 />
                 <div className="sheet-foot">
-                  <button type="button" className="button ghost small" onClick={() => setEditing(null)}>
+                  <button
+                    type="button"
+                    className="button ghost small"
+                    onClick={() => setEditingNoteTarget(null)}
+                  >
                     Cancel
                   </button>
                   <button className="button primary small">Save</button>
@@ -122,25 +161,34 @@ export default function NotesPage({ user }: { user: User }) {
           }
 
           return (
-            <article key={note._id} className={mine ? 'sheet' : 'sheet other'}>
-              {!mine && (
+            <article key={note._id} className={isCurrentUserNoteOwner ? 'sheet' : 'sheet other'}>
+              {!isCurrentUserNoteOwner && (
                 <div className="sheet-owner">
-                  <Avatar name={ownerName(note)} size="sm" />
-                  {ownerName(note)}
+                  <Avatar name={extractNoteOwnerName(note)} size="sm" />
+                  {extractNoteOwnerName(note)}
                 </div>
               )}
               <h3>{note.title}</h3>
               {note.content && <p className="prose">{note.content}</p>}
               <div className="sheet-foot">
-                <span className="muted small">{formatDate(note.updatedAt)}</span>
-                {mine && (
+                <span className="muted small">{formatDisplayDate(note.updatedAt)}</span>
+                {isCurrentUserNoteOwner && (
                   <span className="sheet-actions">
-                    <button className="link" onClick={() => setEditing(note)}>
+                    <button
+                      className="link"
+                      onClick={() => {
+                        setEditingNoteTarget(note);
+                        setEditingNoteContent(note.content || '');
+                      }}
+                    >
                       Edit
                     </button>
                     <button
                       className="link danger"
-                      onClick={() => confirm('Delete this note?') && run(() => api.delete(`/notes/${note._id}`))}
+                      onClick={() =>
+                        confirm('Delete this note?') &&
+                        executeNoteMutationTask(() => api.delete(`/notes/${note._id}`))
+                      }
                     >
                       Delete
                     </button>
@@ -152,7 +200,9 @@ export default function NotesPage({ user }: { user: User }) {
         })}
       </div>
 
-      {result && <Pager pagination={result.pagination} onChange={setPage} />}
+      {paginatedNotesResult && (
+        <Pager pagination={paginatedNotesResult.pagination} onChange={setNotesCurrentPage} />
+      )}
     </section>
   );
 }
