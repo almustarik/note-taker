@@ -1,25 +1,30 @@
 import { useState, type FormEvent } from 'react';
 import { api, type Role, type User } from '../api';
 import Avatar from '../components/Avatar';
+import { ListSkeleton } from '../components/Loading';
 import Pager from '../components/Pager';
 import { usePaged } from '../components/usePaged';
 
 const emptyForm = { name: '', email: '', password: '', role: 'user' as Role };
 
 export default function UsersPage({ currentUser }: { currentUser: User }) {
-  const { result, error, setPage, reload } = usePaged<User>('/users');
+  const { result, error, loading, setPage, reload } = usePaged<User>('/users');
   const [form, setForm] = useState(emptyForm);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [actionError, setActionError] = useState('');
+  const [busy, setBusy] = useState(false);
 
   async function run(action: () => Promise<unknown>) {
+    setBusy(true);
     try {
       setActionError('');
       await action();
       await reload();
     } catch (err) {
       setActionError((err as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -81,14 +86,18 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
             </select>
           </label>
           <div className="row">
-            <button className="button primary">Create user</button>
+            <button className="button primary" disabled={busy}>
+              {busy ? 'Creating…' : 'Create user'}
+            </button>
           </div>
         </form>
       )}
 
       {(error || actionError) && <p className="error">{error || actionError}</p>}
 
-      <div className="panel table-wrap">
+      {loading && !result && <ListSkeleton rows={5} />}
+
+      <div className="panel table-wrap" hidden={!result} aria-busy={loading}>
         <table className="table">
           <thead>
             <tr>
@@ -121,8 +130,8 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
                   </td>
                   <td className="muted">{u.interests.join(', ')}</td>
                   <td className="actions">
-                    <button className="link" onClick={saveEdit}>
-                      Save
+                    <button className="link" disabled={busy} onClick={saveEdit}>
+                      {busy ? 'Saving…' : 'Save'}
                     </button>
                     <button className="link" onClick={() => setEditing(null)}>
                       Cancel
@@ -150,6 +159,7 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
                     {u._id !== currentUser._id && (
                       <button
                         className="link danger"
+                        disabled={busy}
                         onClick={() =>
                           confirm(`Remove ${u.name}? Their notes and posts will be deleted too.`) &&
                           run(() => api.delete(`/users/${u._id}`))

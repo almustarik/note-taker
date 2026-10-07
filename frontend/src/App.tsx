@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { api, hasToken, setToken, type User } from './api';
+import { api, hasToken, setToken, setUnauthorizedHandler, type User } from './api';
 import Avatar from './components/Avatar';
 import { FeedIcon, LogoutIcon, NoteIcon, TagIcon, UsersIcon } from './components/icons';
+import { FullPageLoader } from './components/Loading';
 import AuthPage from './pages/AuthPage';
 import InterestsPage from './pages/InterestsPage';
 import NotesPage from './pages/NotesPage';
@@ -15,19 +16,37 @@ export default function App() {
   const [loading, setLoading] = useState(hasToken());
   const [tab, setTab] = useState<Tab>('notes');
   const [postsAuthor, setPostsAuthor] = useState<string | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [bootError, setBootError] = useState('');
 
   useEffect(() => {
-    if (!hasToken()) return;
+    setUnauthorizedHandler(() => {
+      setUser(null);
+      setSessionExpired(true);
+    });
+  }, []);
+
+  function loadSession() {
+    setBootError('');
+    setLoading(true);
     api
       .get<User>('/auth/me')
       .then(setUser)
-      .catch(() => setToken(null))
+      .catch((err: Error) => {
+        // a 401 is handled by the api client; anything else is a network/server problem
+        if (hasToken()) setBootError(err.message);
+      })
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    if (hasToken()) loadSession();
   }, []);
 
   function handleLogin(token: string, user: User) {
     setToken(token);
     setUser(user);
+    setSessionExpired(false);
     setTab('notes');
   }
 
@@ -41,8 +60,8 @@ export default function App() {
     setTab('posts');
   }
 
-  if (loading) return null;
-  if (!user) return <AuthPage onLogin={handleLogin} />;
+  if (loading || bootError) return <FullPageLoader error={bootError} onRetry={loadSession} />;
+  if (!user) return <AuthPage onLogin={handleLogin} notice={sessionExpired ? 'Your session expired. Please log in again.' : ''} />;
 
   const tabs: { id: Tab; label: string; icon: ReactNode }[] = [
     { id: 'notes', label: 'My notes', icon: <NoteIcon /> },

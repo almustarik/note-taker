@@ -1,4 +1,5 @@
 import { Body, Controller, Get, HttpCode, Patch, Post, UseGuards } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { CurrentUser, Public } from '../common/decorators.js';
 import type { AuthUser } from '../common/role.enum.js';
@@ -6,6 +7,7 @@ import { UsersService } from '../users/users.service.js';
 import { AuthService } from './auth.service.js';
 import { LoginDto, RegisterDto, UpdateProfileDto } from './dto/auth.dto.js';
 
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(

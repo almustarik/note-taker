@@ -48,18 +48,33 @@ export function setToken(value: string | null) {
 
 export const hasToken = () => Boolean(token);
 
+// App registers this so an expired or revoked session goes back to the login screen
+let onUnauthorized = () => {};
+export const setUnauthorizedHandler = (handler: () => void) => {
+  onUnauthorized = handler;
+};
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(API_URL + path, {
-    method,
-    headers: {
-      ...(body ? { 'Content-Type': 'application/json' } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(API_URL + path, {
+      method,
+      headers: {
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new Error("Can't reach the server. Check your connection and try again.");
+  }
 
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && token) {
+    setToken(null);
+    onUnauthorized();
+  }
   if (!res.ok) {
     const message = Array.isArray(data.message) ? data.message.join(', ') : data.message;
     throw new Error(message ?? 'Something went wrong');

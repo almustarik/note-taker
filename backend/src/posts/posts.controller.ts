@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { Types } from 'mongoose';
 import { CurrentUser } from '../common/decorators.js';
 import { PaginationDto } from '../common/pagination.js';
@@ -7,6 +8,7 @@ import type { AuthUser } from '../common/role.enum.js';
 import { CreatePostDto } from './dto/post.dto.js';
 import { PostsService } from './posts.service.js';
 
+@ApiTags('posts')
 @Controller('posts')
 export class PostsController {
   constructor(private postsService: PostsService) {}

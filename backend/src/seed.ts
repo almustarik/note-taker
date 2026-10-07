@@ -2,12 +2,13 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { getModelToken } from '@nestjs/mongoose';
 import bcrypt from 'bcryptjs';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { AppModule } from './app.module.js';
 import { Role } from './common/role.enum.js';
 import { Note } from './schemas/note.schema.js';
 import { Post } from './schemas/post.schema.js';
 import { User } from './schemas/user.schema.js';
+import { demoUsers } from './seed-data.js';
 
 const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error'] });
 const userModel = app.get<Model<User>>(getModelToken(User.name));
@@ -27,26 +28,39 @@ if (!(await userModel.exists({ email: adminEmail }))) {
   console.log(`Admin created: ${adminEmail}`);
 }
 
-const demoUsers: [string, string[]][] = [
-  ['Alice', ['chess', 'reading', 'hiking']],
-  ['Bob', ['chess', 'cooking']],
-  ['Carol', ['reading', 'photography']],
-  ['Dan', ['hiking', 'photography', 'chess']],
-  ['Eve', []],
-];
+// Re-running the seed replaces the demo accounts and their content. Other accounts are not touched.
+const existing = await userModel.find({ email: { $in: demoUsers.map((u) => u.email) } }, { _id: 1 }).lean();
+const existingIds = existing.map((u) => u._id);
+await Promise.all([
+  noteModel.deleteMany({ owner: { $in: existingIds } }),
+  postModel.deleteMany({ author: { $in: existingIds } }),
+  userModel.deleteMany({ _id: { $in: existingIds } }),
+]);
+
+// _id carries the creation time, so lists sorted by _id match the createdAt dates
+function stamp(daysAgo: number) {
+  const date = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
+  const _id = new Types.ObjectId(Types.ObjectId.generate(Math.floor(date.getTime() / 1000)));
+  return { _id, createdAt: date, updatedAt: date };
+}
 
 const password = await bcrypt.hash('Password123', 10);
-for (const [name, interests] of demoUsers) {
-  const email = `${name.toLowerCase()}@example.com`;
-  if (await userModel.exists({ email })) continue;
+const users = [];
+const notes = [];
+const posts = [];
 
-  const user = await userModel.create({ name, email, password, interests });
-  await noteModel.create([
-    { owner: user._id, title: `${name}'s todo`, content: 'Buy milk' },
-    { owner: user._id, title: `${name}'s ideas`, content: 'Learn MongoDB aggregation' },
-  ]);
-  await postModel.create({ author: user._id, title: `Hello from ${name}`, body: `I like ${interests.join(', ') || 'nothing yet'}` });
+for (const demo of demoUsers) {
+  const user = { ...stamp(demo.joinedDaysAgo), name: demo.name, email: demo.email, password, role: Role.User, interests: demo.interests };
+  users.push(user);
+  for (const n of demo.notes) notes.push({ ...stamp(n.daysAgo), owner: user._id, title: n.title, content: n.text });
+  for (const p of demo.posts) posts.push({ ...stamp(p.daysAgo), author: user._id, title: p.title, body: p.text });
 }
-console.log('Demo users created (password: Password123)');
+
+// raw inserts so the backdated timestamps are kept as they are
+await userModel.collection.insertMany(users);
+await noteModel.collection.insertMany(notes);
+await postModel.collection.insertMany(posts);
+
+console.log(`Seeded ${users.length} demo users, ${notes.length} notes and ${posts.length} posts (password: Password123)`);
 
 await app.close();

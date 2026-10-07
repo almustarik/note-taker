@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { Types } from 'mongoose';
 import { CurrentUser } from '../common/decorators.js';
 import { ParseObjectIdPipe } from '../common/parse-object-id.pipe.js';
@@ -6,6 +7,7 @@ import type { AuthUser } from '../common/role.enum.js';
 import { CreateNoteDto, NotesQueryDto, UpdateNoteDto } from './dto/note.dto.js';
 import { NotesService } from './notes.service.js';
 
+@ApiTags('notes')
 @Controller('notes')
 export class NotesController {
   constructor(private notesService: NotesService) {}

@@ -1,15 +1,18 @@
 import { useState, type FormEvent } from 'react';
 import { api, type User } from '../api';
+import { slowMessage, useSlow } from '../components/Loading';
 
 interface Props {
   onLogin: (token: string, user: User) => void;
+  notice?: string;
 }
 
-export default function AuthPage({ onLogin }: Props) {
+export default function AuthPage({ onLogin, notice }: Props) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [form, setForm] = useState({ name: '', email: '', password: '', interests: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const slow = useSlow(busy);
 
   const update = (field: keyof typeof form) => (e: { target: { value: string } }) =>
     setForm({ ...form, [field]: e.target.value });
@@ -61,6 +64,8 @@ export default function AuthPage({ onLogin }: Props) {
           <h1>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
           <p className="muted lead">{mode === 'login' ? 'Log in to see your notes.' : 'It only takes a minute.'}</p>
 
+          {notice && !error && <p className="notice">{notice}</p>}
+
           {mode === 'register' && (
             <label>
               Name
@@ -90,6 +95,7 @@ export default function AuthPage({ onLogin }: Props) {
           )}
 
           {error && <p className="error">{error}</p>}
+          {busy && slow && <p className="muted small">{slowMessage}</p>}
 
           <button className="button primary large" disabled={busy}>
             {busy ? 'Please wait…' : mode === 'login' ? 'Log in' : 'Create account'}

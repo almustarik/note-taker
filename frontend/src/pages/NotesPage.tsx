@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api, type Note, type User } from '../api';
 import Avatar from '../components/Avatar';
+import { ListSkeleton } from '../components/Loading';
 import Pager from '../components/Pager';
 import { usePaged } from '../components/usePaged';
 
@@ -10,20 +11,24 @@ const formatDate = (d: string) =>
 export default function NotesPage({ user }: { user: User }) {
   const isAdmin = user.role === 'admin';
   const [showAll, setShowAll] = useState(false);
-  const { result, error, setPage, reload } = usePaged<Note>(showAll ? '/notes?scope=all' : '/notes');
+  const { result, error, loading, setPage, reload } = usePaged<Note>(showAll ? '/notes?scope=all' : '/notes');
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [editing, setEditing] = useState<Note | null>(null);
   const [actionError, setActionError] = useState('');
+  const [busy, setBusy] = useState(false);
 
   async function run(action: () => Promise<unknown>) {
+    setBusy(true);
     try {
       setActionError('');
       await action();
       await reload();
     } catch (err) {
       setActionError((err as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -77,22 +82,24 @@ export default function NotesPage({ user }: { user: User }) {
         <input className="composer-title" placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} required />
         <textarea placeholder="Take a note…" rows={2} value={content} onChange={(e) => setContent(e.target.value)} />
         <div className="composer-actions">
-          <button className="button primary" disabled={!title.trim()}>
-            Add note
+          <button className="button primary" disabled={busy || !title.trim()}>
+            {busy ? 'Saving…' : 'Add note'}
           </button>
         </div>
       </form>
 
       {(error || actionError) && <p className="error">{error || actionError}</p>}
 
-      {result && result.data.length === 0 && (
+      {loading && !result && <ListSkeleton variant="sheets" rows={4} />}
+
+      {!loading && result && result.data.length === 0 && (
         <div className="empty">
           <p className="empty-title">No notes yet</p>
           <p>Write your first one above. Only you can see it.</p>
         </div>
       )}
 
-      <div className="board">
+      <div className="board" aria-busy={loading}>
         {result?.data.map((note) => {
           const mine = ownerId(note) === user._id;
 
@@ -115,7 +122,9 @@ export default function NotesPage({ user }: { user: User }) {
                   <button type="button" className="button ghost small" onClick={() => setEditing(null)}>
                     Cancel
                   </button>
-                  <button className="button primary small">Save</button>
+                  <button className="button primary small" disabled={busy}>
+                    {busy ? 'Saving…' : 'Save'}
+                  </button>
                 </div>
               </form>
             );
@@ -140,6 +149,7 @@ export default function NotesPage({ user }: { user: User }) {
                     </button>
                     <button
                       className="link danger"
+                      disabled={busy}
                       onClick={() => confirm('Delete this note?') && run(() => api.delete(`/notes/${note._id}`))}
                     >
                       Delete

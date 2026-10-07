@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api, type InterestGroup, type User } from '../api';
 import Avatar from '../components/Avatar';
+import { ListSkeleton } from '../components/Loading';
 import Pager from '../components/Pager';
 import { usePaged } from '../components/usePaged';
 
@@ -19,16 +20,18 @@ const splitList = (value: string) =>
 export default function InterestsPage({ user, onUserChange, onSelectUser }: Props) {
   const [filterInput, setFilterInput] = useState('');
   const [filter, setFilter] = useState('');
-  const { result, error, setPage, reload } = usePaged<InterestGroup>(
+  const { result, error, loading, setPage, reload } = usePaged<InterestGroup>(
     filter ? `/users/interests?interest=${encodeURIComponent(filter)}` : '/users/interests',
   );
 
   const [mine, setMine] = useState(user.interests.join(', '));
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   async function saveInterests(e: FormEvent) {
     e.preventDefault();
+    setSaving(true);
     try {
       const updated = await api.patch<User>('/auth/me', { interests: splitList(mine) });
       onUserChange(updated);
@@ -38,6 +41,8 @@ export default function InterestsPage({ user, onUserChange, onSelectUser }: Prop
       await reload();
     } catch (err) {
       setSaveError((err as Error).message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -67,8 +72,8 @@ export default function InterestsPage({ user, onUserChange, onSelectUser }: Prop
             }}
             placeholder="chess, reading, hiking"
           />
-          <button className="button primary" disabled={saved}>
-            {saved ? 'Saved' : 'Save'}
+          <button className="button primary" disabled={saved || saving}>
+            {saving ? 'Saving…' : saved ? 'Saved' : 'Save'}
           </button>
         </div>
         {user.interests.length > 0 && (
@@ -105,14 +110,15 @@ export default function InterestsPage({ user, onUserChange, onSelectUser }: Prop
       </form>
 
       {error && <p className="error">{error}</p>}
-      {result && result.data.length === 0 && (
+      {loading && !result && <ListSkeleton rows={4} />}
+      {!loading && result && result.data.length === 0 && (
         <div className="empty">
           <p className="empty-title">Nothing here</p>
           <p>Nobody has listed {filter ? 'these interests' : 'any interests'} yet.</p>
         </div>
       )}
 
-      <div className="groups">
+      <div className="groups" aria-busy={loading}>
         {result?.data.map((group) => (
           <article key={group.interest} className="group">
             <div className="group-head">

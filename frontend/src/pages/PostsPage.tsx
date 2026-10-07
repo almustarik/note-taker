@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api, type Page, type Post, type User } from '../api';
 import Avatar from '../components/Avatar';
+import { ListSkeleton } from '../components/Loading';
 import Pager from '../components/Pager';
 import { usePaged } from '../components/usePaged';
 
@@ -22,34 +23,38 @@ function timeAgo(date: string) {
 }
 
 export default function PostsPage({ user, authorId, onSelectAuthor }: Props) {
-  const { result, error, setPage, reload } = usePaged<Post>(authorId ? `/users/${authorId}/posts` : '/posts');
+  const { result, error, loading, setPage, reload } = usePaged<Post>(authorId ? `/users/${authorId}/posts` : '/posts');
   const author = authorId ? (result as AuthorPosts | null)?.author : null;
 
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [actionError, setActionError] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  async function publish(e: FormEvent) {
-    e.preventDefault();
+  async function run(action: () => Promise<unknown>) {
+    setBusy(true);
     try {
-      await api.post('/posts', { title, body });
-      setTitle('');
-      setBody('');
       setActionError('');
+      await action();
       await reload();
     } catch (err) {
       setActionError((err as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
 
-  async function remove(post: Post) {
-    if (!confirm('Delete this post?')) return;
-    try {
-      await api.delete(`/posts/${post._id}`);
-      await reload();
-    } catch (err) {
-      setActionError((err as Error).message);
-    }
+  function publish(e: FormEvent) {
+    e.preventDefault();
+    run(async () => {
+      await api.post('/posts', { title, body });
+      setTitle('');
+      setBody('');
+    });
+  }
+
+  function remove(post: Post) {
+    if (confirm('Delete this post?')) run(() => api.delete(`/posts/${post._id}`));
   }
 
   const total = result?.pagination.total ?? 0;
@@ -92,8 +97,8 @@ export default function PostsPage({ user, authorId, onSelectAuthor }: Props) {
             </div>
           </div>
           <div className="composer-actions">
-            <button className="button primary" disabled={!title.trim() || !body.trim()}>
-              Publish
+            <button className="button primary" disabled={busy || !title.trim() || !body.trim()}>
+              {busy ? 'Publishing…' : 'Publish'}
             </button>
           </div>
         </form>
@@ -101,14 +106,16 @@ export default function PostsPage({ user, authorId, onSelectAuthor }: Props) {
 
       {(error || actionError) && <p className="error">{error || actionError}</p>}
 
-      {result && result.data.length === 0 && (
+      {loading && !result && <ListSkeleton rows={4} />}
+
+      {!loading && result && result.data.length === 0 && (
         <div className="empty">
           <p className="empty-title">No posts yet</p>
           <p>{authorId ? 'Nothing published here so far.' : 'Publish the first one above.'}</p>
         </div>
       )}
 
-      <div className="feed">
+      <div className="feed" aria-busy={loading}>
         {result?.data.map((post) => {
           const postAuthor = post.author ?? author;
           const mine = postAuthor?._id === user._id;
@@ -125,7 +132,7 @@ export default function PostsPage({ user, authorId, onSelectAuthor }: Props) {
                 )}
                 <span className="muted small">{timeAgo(post.createdAt)}</span>
                 {mine && (
-                  <button className="link danger small push" onClick={() => remove(post)}>
+                  <button className="link danger small push" disabled={busy} onClick={() => remove(post)}>
                     Delete
                   </button>
                 )}
