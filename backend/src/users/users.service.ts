@@ -3,7 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import bcrypt from 'bcryptjs';
 import { Model, PipelineStage, Types } from 'mongoose';
 import { paginate, PaginationDto } from '../common/pagination.js';
-import { AuthUser } from '../common/role.enum.js';
+import { AuthUser, Role } from '../common/role.enum.js';
 import { Note } from '../schemas/note.schema.js';
 import { Post } from '../schemas/post.schema.js';
 import { User } from '../schemas/user.schema.js';
@@ -64,10 +64,19 @@ export class UsersService {
     return user;
   }
 
-  // admin can't change own role or delete themselves, so there is always at least one admin left
+  // Guard against demoting or deleting the last admin, and wrap cascade in transactions
   async adminUpdate(admin: AuthUser, id: Types.ObjectId, dto: UpdateUserDto) {
     if (id.equals(admin.id) && dto.role && dto.role !== admin.role) {
       throw new BadRequestException('You cannot change your own role');
+    }
+    if (dto.role && dto.role === Role.User) {
+      const target = await this.userModel.findById(id);
+      if (target?.role === Role.Admin) {
+        const adminCount = await this.userModel.countDocuments({ role: Role.Admin });
+        if (adminCount <= 1) {
+          throw new BadRequestException('Cannot demote the last remaining admin');
+        }
+      }
     }
     return this.update(id, dto);
   }
@@ -75,10 +84,37 @@ export class UsersService {
   async remove(admin: AuthUser, id: Types.ObjectId) {
     if (id.equals(admin.id)) throw new BadRequestException('You cannot delete your own account');
 
-    const user = await this.userModel.findByIdAndDelete(id);
-    if (!user) throw new NotFoundException('User not found');
+    const target = await this.userModel.findById(id);
+    if (!target) throw new NotFoundException('User not found');
 
-    await Promise.all([this.noteModel.deleteMany({ owner: id }), this.postModel.deleteMany({ author: id })]);
+    if (target.role === Role.Admin) {
+      const adminCount = await this.userModel.countDocuments({ role: Role.Admin });
+      if (adminCount <= 1) {
+        throw new BadRequestException('Cannot delete the last remaining admin');
+      }
+    }
+
+    const isReplicaSet = Boolean((this.userModel.db as any).client?.topology?.description?.setName);
+    if (isReplicaSet) {
+      const session = await this.userModel.db.startSession();
+      try {
+        await session.withTransaction(async () => {
+          await this.userModel.findByIdAndDelete(id, { session });
+          await Promise.all([
+            this.noteModel.deleteMany({ owner: id }, { session }),
+            this.postModel.deleteMany({ author: id }, { session }),
+          ]);
+        });
+      } finally {
+        await session.endSession();
+      }
+    } else {
+      await this.userModel.findByIdAndDelete(id);
+      await Promise.all([
+        this.noteModel.deleteMany({ owner: id }),
+        this.postModel.deleteMany({ author: id }),
+      ]);
+    }
   }
 
   async groupByInterests({ page, limit, interest }: InterestsQueryDto) {
