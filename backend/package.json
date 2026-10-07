@@ -32,6 +32,7 @@
     "build": "nest build",
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
-    "seed": "node dist/seed.js"
+    "seed": "node dist/seed.js",
+    "seed:atlas": "node --env-file=.env.atlas dist/seed.js"
   }
 }
