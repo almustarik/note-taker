@@ -4,60 +4,46 @@ import Avatar from '../components/Avatar';
 import Pager from '../components/Pager';
 import { usePaged } from '../components/usePaged';
 
-interface InterestsPageProps {
+interface Props {
   user: User;
-  onUserChange: (updatedUser: User) => void;
-  onSelectUser: (selectedUserId: string) => void;
+  onUserChange: (user: User) => void;
+  onSelectUser: (id: string) => void;
 }
 
-const parseCommaSeparatedInterestTags = (rawCommaString: string): string[] =>
-  rawCommaString
+const splitList = (value: string) =>
+  value
     .split(',')
-    .map((tagSegment) => tagSegment.trim())
+    .map((s) => s.trim())
     .filter(Boolean);
 
-export default function InterestsPage({
-  user: currentUser,
-  onUserChange,
-  onSelectUser,
-}: InterestsPageProps) {
-  const [searchFilterInputValue, setSearchFilterInputValue] = useState<string>('');
-  const [activeSelectedFilterTag, setActiveSelectedFilterTag] = useState<string>('');
-  const {
-    result: aggregatedInterestGroupsResult,
-    error: interestsFetchErrorMessage,
-    setPage: setInterestsCurrentPage,
-    reload: reloadInterestsData,
-  } = usePaged<InterestGroup>(
-    activeSelectedFilterTag
-      ? `/users/interests?interest=${encodeURIComponent(activeSelectedFilterTag)}`
-      : '/users/interests',
+export default function InterestsPage({ user, onUserChange, onSelectUser }: Props) {
+  const [filterInput, setFilterInput] = useState('');
+  const [filter, setFilter] = useState('');
+  const { result, error, setPage, reload } = usePaged<InterestGroup>(
+    filter ? `/users/interests?interest=${encodeURIComponent(filter)}` : '/users/interests',
   );
 
-  const [userInterestsInputValue, setUserInterestsInputValue] = useState<string>(
-    currentUser.interests.join(', '),
-  );
-  const [isUserInterestsSaved, setIsUserInterestsSaved] = useState<boolean>(false);
-  const [saveInterestsErrorMessage, setSaveInterestsErrorMessage] = useState<string>('');
+  const [mine, setMine] = useState(user.interests.join(', '));
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
-  async function handleSaveUserInterestsSubmit(event: FormEvent) {
-    event.preventDefault();
+  async function saveInterests(e: FormEvent) {
+    e.preventDefault();
     try {
-      const parsedTags = parseCommaSeparatedInterestTags(userInterestsInputValue);
-      const updatedUser = await api.patch<User>('/auth/me', { interests: parsedTags });
-      onUserChange(updatedUser);
-      setUserInterestsInputValue(updatedUser.interests.join(', '));
-      setIsUserInterestsSaved(true);
-      setSaveInterestsErrorMessage('');
-      await reloadInterestsData();
-    } catch (caughtError) {
-      setSaveInterestsErrorMessage((caughtError as Error).message);
+      const updated = await api.patch<User>('/auth/me', { interests: splitList(mine) });
+      onUserChange(updated);
+      setMine(updated.interests.join(', '));
+      setSaved(true);
+      setSaveError('');
+      await reload();
+    } catch (err) {
+      setSaveError((err as Error).message);
     }
   }
 
-  function handleApplyInterestTagFilter(selectedInterestTag: string) {
-    setSearchFilterInputValue(selectedInterestTag);
-    setActiveSelectedFilterTag(parseCommaSeparatedInterestTags(selectedInterestTag).join(','));
+  function applyFilter(value: string) {
+    setFilterInput(value);
+    setFilter(splitList(value).join(','));
   }
 
   return (
@@ -69,119 +55,88 @@ export default function InterestsPage({
         </div>
       </header>
 
-      <form className="panel mine" onSubmit={handleSaveUserInterestsSubmit}>
+      <form className="panel mine" onSubmit={saveInterests}>
         <label htmlFor="my-interests">Your interests</label>
         <div className="mine-row">
           <input
             id="my-interests"
-            value={userInterestsInputValue}
-            onChange={(event) => {
-              setUserInterestsInputValue(event.target.value);
-              setIsUserInterestsSaved(false);
+            value={mine}
+            onChange={(e) => {
+              setMine(e.target.value);
+              setSaved(false);
             }}
             placeholder="chess, reading, hiking"
           />
-          <button className="button primary" disabled={isUserInterestsSaved}>
-            {isUserInterestsSaved ? 'Saved' : 'Save'}
+          <button className="button primary" disabled={saved}>
+            {saved ? 'Saved' : 'Save'}
           </button>
         </div>
-        {currentUser.interests.length > 0 && (
+        {user.interests.length > 0 && (
           <div className="tags">
-            {currentUser.interests.map((interestTag) => (
-              <button
-                type="button"
-                key={interestTag}
-                className="tag hl"
-                onClick={() => handleApplyInterestTagFilter(interestTag)}
-                title={`Show only ${interestTag}`}
-              >
-                {interestTag}
+            {user.interests.map((i) => (
+              <button type="button" key={i} className="tag hl" onClick={() => applyFilter(i)} title={`Show only ${i}`}>
+                {i}
               </button>
             ))}
           </div>
         )}
-        {saveInterestsErrorMessage && <p className="error">{saveInterestsErrorMessage}</p>}
+        {saveError && <p className="error">{saveError}</p>}
       </form>
 
       <form
         className="search"
-        onSubmit={(event) => {
-          event.preventDefault();
-          handleApplyInterestTagFilter(searchFilterInputValue);
+        onSubmit={(e) => {
+          e.preventDefault();
+          applyFilter(filterInput);
         }}
       >
         <input
           type="search"
-          value={searchFilterInputValue}
-          onChange={(event) => setSearchFilterInputValue(event.target.value)}
+          value={filterInput}
+          onChange={(e) => setFilterInput(e.target.value)}
           placeholder="Filter by interest, e.g. chess, reading"
         />
         <button className="button ghost">Filter</button>
-        {activeSelectedFilterTag && (
-          <button
-            type="button"
-            className="link"
-            onClick={() => handleApplyInterestTagFilter('')}
-          >
+        {filter && (
+          <button type="button" className="link" onClick={() => applyFilter('')}>
             Clear
           </button>
         )}
       </form>
 
-      {interestsFetchErrorMessage && <p className="error">{interestsFetchErrorMessage}</p>}
-      {aggregatedInterestGroupsResult && aggregatedInterestGroupsResult.data.length === 0 && (
+      {error && <p className="error">{error}</p>}
+      {result && result.data.length === 0 && (
         <div className="empty">
           <p className="empty-title">Nothing here</p>
-          <p>
-            Nobody has listed{' '}
-            {activeSelectedFilterTag ? 'these interests' : 'any interests'} yet.
-          </p>
+          <p>Nobody has listed {filter ? 'these interests' : 'any interests'} yet.</p>
         </div>
       )}
 
       <div className="groups">
-        {aggregatedInterestGroupsResult?.data.map((interestGroupItem) => (
-          <article key={interestGroupItem.interest} className="group">
+        {result?.data.map((group) => (
+          <article key={group.interest} className="group">
             <div className="group-head">
               <h3>
-                <mark
-                  className={
-                    currentUser.interests.includes(interestGroupItem.interest) ? 'hl' : undefined
-                  }
-                >
-                  {interestGroupItem.interest}
-                </mark>
+                <mark className={user.interests.includes(group.interest) ? 'hl' : undefined}>{group.interest}</mark>
               </h3>
-              <span className="count">{interestGroupItem.count}</span>
+              <span className="count">{group.count}</span>
             </div>
             <div className="people">
-              {interestGroupItem.users.map((memberUser) => (
-                <button
-                  key={memberUser._id}
-                  className="person"
-                  onClick={() => onSelectUser(memberUser._id)}
-                  title={`See ${memberUser.name}'s posts`}
-                >
-                  <Avatar name={memberUser.name} size="sm" />
-                  {memberUser._id === currentUser._id ? 'You' : memberUser.name}
+              {group.users.map((u) => (
+                <button key={u._id} className="person" onClick={() => onSelectUser(u._id)} title={`See ${u.name}'s posts`}>
+                  <Avatar name={u.name} size="sm" />
+                  {u._id === user._id ? 'You' : u.name}
                 </button>
               ))}
-              {interestGroupItem.count > interestGroupItem.users.length && (
-                <span className="muted small">
-                  +{interestGroupItem.count - interestGroupItem.users.length} more
-                </span>
+              {group.count > group.users.length && (
+                <span className="muted small">+{group.count - group.users.length} more</span>
               )}
             </div>
           </article>
         ))}
       </div>
 
-      {aggregatedInterestGroupsResult && (
-        <Pager
-          pagination={aggregatedInterestGroupsResult.pagination}
-          onChange={setInterestsCurrentPage}
-        />
-      )}
+      {result && <Pager pagination={result.pagination} onChange={setPage} />}
     </section>
   );
 }

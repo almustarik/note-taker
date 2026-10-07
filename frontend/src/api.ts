@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api';
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api';
 
 export type Role = 'user' | 'admin';
 
@@ -14,7 +14,6 @@ export interface Note {
   _id: string;
   title: string;
   content: string;
-  completed?: boolean;
   owner: string | { _id: string; name: string; email: string };
   updatedAt: string;
 }
@@ -23,7 +22,7 @@ export interface Post {
   _id: string;
   title: string;
   body: string;
-  author?: string | { _id: string; name: string } | null;
+  author?: { _id: string; name: string } | null;
   createdAt: string;
 }
 
@@ -38,63 +37,38 @@ export interface Page<T> {
   pagination: { page: number; limit: number; total: number; totalPages: number };
 }
 
-let activeAuthenticationToken: string | null = localStorage.getItem('token');
+let token = localStorage.getItem('token');
 
-export function setToken(newTokenValue: string | null) {
-  activeAuthenticationToken = newTokenValue;
-  if (newTokenValue) {
-    localStorage.setItem('token', newTokenValue);
-  } else {
-    localStorage.removeItem('token');
-  }
+export function setToken(value: string | null) {
+  token = value;
+  if (value) localStorage.setItem('token', value);
+  else localStorage.removeItem('token');
 }
 
-export const hasToken = (): boolean => Boolean(activeAuthenticationToken);
+export const hasToken = () => Boolean(token);
 
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    public status: number,
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
-
-async function executeHttpRequest<T>(
-  httpMethod: string,
-  endpointPath: string,
-  requestPayload?: unknown,
-): Promise<T> {
-  const httpResponse = await fetch(`${API_BASE_URL}${endpointPath}`, {
-    method: httpMethod,
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(API_URL + path, {
+    method,
     headers: {
-      ...(requestPayload ? { 'Content-Type': 'application/json' } : {}),
-      ...(activeAuthenticationToken ? { Authorization: `Bearer ${activeAuthenticationToken}` } : {}),
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: requestPayload ? JSON.stringify(requestPayload) : undefined,
+    body: body ? JSON.stringify(body) : undefined,
   });
 
-  if (httpResponse.status === 204) {
-    return undefined as T;
+  if (res.status === 204) return undefined as T;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = Array.isArray(data.message) ? data.message.join(', ') : data.message;
+    throw new Error(message ?? 'Something went wrong');
   }
-
-  const parsedResponseBody = await httpResponse.json().catch(() => ({}));
-  if (!httpResponse.ok) {
-    const errorDetailsMessage = Array.isArray(parsedResponseBody.message)
-      ? parsedResponseBody.message.join(', ')
-      : parsedResponseBody.message;
-    throw new ApiError(errorDetailsMessage ?? 'Network request failed', httpResponse.status);
-  }
-
-  return parsedResponseBody as T;
+  return data;
 }
 
 export const api = {
-  get: <T>(endpointPath: string) => executeHttpRequest<T>('GET', endpointPath),
-  post: <T>(endpointPath: string, requestPayload?: unknown) =>
-    executeHttpRequest<T>('POST', endpointPath, requestPayload),
-  patch: <T>(endpointPath: string, requestPayload?: unknown) =>
-    executeHttpRequest<T>('PATCH', endpointPath, requestPayload),
-  delete: (endpointPath: string) => executeHttpRequest<void>('DELETE', endpointPath),
+  get: <T>(path: string) => request<T>('GET', path),
+  post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
+  patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
+  delete: (path: string) => request<void>('DELETE', path),
 };

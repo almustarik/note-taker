@@ -26,10 +26,6 @@ npm run seed                # admin@example.com / Admin12345 + a few demo users 
 npm start
 ```
 
-API Documentation:
-- **Scalar API Reference**: http://localhost:3000/docs
-- **Swagger UI**: http://localhost:3000/docs/swagger
-
 Frontend (http://localhost:5173):
 
 ```bash
@@ -50,16 +46,16 @@ When an admin removes a user, that user's notes and posts are removed too. An ad
 
 ## Endpoints
 
-All routes are under `/api` and need a `Bearer` token, except register and login. List endpoints accept `?page=&limit=` (max 100).
+All routes are under `/api` and need a `Bearer` token, except register and login (those two are rate limited to 15 requests a minute). List endpoints accept `?page=&limit=` (max 100).
 
 | Method | Path | Access |
 | --- | --- | --- |
 | POST | `/auth/register`, `/auth/login` | public |
 | GET / PATCH | `/auth/me` | logged in |
-| GET / POST | `/notes` | logged in (`?scope=all` or `?owner=<id>`: admin only) |
+| GET / POST | `/notes` | logged in (`?scope=all`: admin only) |
 | GET / PATCH / DELETE | `/notes/:id` | owner (admins can also GET) |
 | GET / POST | `/posts` | logged in |
-| GET / PATCH / DELETE | `/posts/:id` | logged in (PATCH/DELETE: author only) |
+| DELETE | `/posts/:id` | author |
 | GET | `/users/interests?interest=chess,reading` | logged in |
 | GET | `/users/:id/posts` | logged in |
 | GET / POST | `/users` | admin |

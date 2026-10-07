@@ -21,7 +21,8 @@ export class AuthService {
     if (!user || !(await bcrypt.compare(password, user.password))) {
       throw new UnauthorizedException('Invalid email or password');
     }
-    return { token: this.signToken(user._id.toString()), user };
+    const { password: _hash, ...safeUser } = user;
+    return { token: this.signToken(user._id.toString()), user: safeUser };
   }
 
   private signToken(userId: string) {

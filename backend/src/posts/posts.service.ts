@@ -4,7 +4,7 @@ import { Model, Types } from 'mongoose';
 import { paginate, PaginationDto } from '../common/pagination.js';
 import { AuthUser } from '../common/role.enum.js';
 import { Post } from '../schemas/post.schema.js';
-import { CreatePostDto, UpdatePostDto } from './dto/post.dto.js';
+import { CreatePostDto } from './dto/post.dto.js';
 
 @Injectable()
 export class PostsService {
@@ -26,20 +26,6 @@ export class PostsService {
 
   create(user: AuthUser, dto: CreatePostDto) {
     return this.postModel.create({ ...dto, author: user.id });
-  }
-
-  async findOne(id: Types.ObjectId) {
-    const post = await this.postModel.findById(id).populate('author', 'name').lean();
-    if (!post) throw new NotFoundException('Post not found');
-    return post;
-  }
-
-  async update(user: AuthUser, id: Types.ObjectId, dto: UpdatePostDto) {
-    const post = await this.postModel
-      .findOneAndUpdate({ _id: id, author: user.id }, dto, { returnDocument: 'after' })
-      .lean();
-    if (!post) throw new NotFoundException('Post not found');
-    return post;
   }
 
   async remove(user: AuthUser, id: Types.ObjectId) {

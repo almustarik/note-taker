@@ -1,6 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { Types } from 'mongoose';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Roles } from '../common/decorators.js';
 import { PaginationDto } from '../common/pagination.js';
 import { ParseObjectIdPipe } from '../common/parse-object-id.pipe.js';
@@ -9,8 +8,6 @@ import type { AuthUser } from '../common/role.enum.js';
 import { CreateUserDto, InterestsQueryDto, UpdateUserDto } from './dto/user.dto.js';
 import { UsersService } from './users.service.js';
 
-@ApiTags('users')
-@ApiBearerAuth()
 @Controller('users')
 export class UsersController {
   constructor(private usersService: UsersService) {}

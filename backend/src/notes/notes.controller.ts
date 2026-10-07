@@ -1,14 +1,11 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { Types } from 'mongoose';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../common/decorators.js';
 import { ParseObjectIdPipe } from '../common/parse-object-id.pipe.js';
 import type { AuthUser } from '../common/role.enum.js';
 import { CreateNoteDto, NotesQueryDto, UpdateNoteDto } from './dto/note.dto.js';
 import { NotesService } from './notes.service.js';
 
-@ApiTags('notes')
-@ApiBearerAuth()
 @Controller('notes')
 export class NotesController {
   constructor(private notesService: NotesService) {}

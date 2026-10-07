@@ -10,26 +10,24 @@ import { CreateNoteDto, NotesQueryDto, UpdateNoteDto } from './dto/note.dto.js';
 export class NotesService {
   constructor(@InjectModel(Note.name) private noteModel: Model<Note>) {}
 
-  async findAll(user: AuthUser, { page, limit, scope, owner }: NotesQueryDto) {
+  async findAll(user: AuthUser, { page, limit, scope }: NotesQueryDto) {
     const isAdmin = user.role === Role.Admin;
-    if ((scope === 'all' || owner) && !isAdmin) {
+    if (scope === 'all' && !isAdmin) {
       throw new ForbiddenException();
     }
 
-    const filter: { owner?: Types.ObjectId } = {};
-    if (owner) filter.owner = new Types.ObjectId(owner);
-    else if (scope !== 'all') filter.owner = user.id;
+    const filter = scope === 'all' ? {} : { owner: user.id };
 
     const query = this.noteModel
       .find(filter)
       .sort({ _id: -1 })
       .skip((page - 1) * limit)
       .limit(limit);
-    if (isAdmin) query.populate('owner', 'name email');
+    if (scope === 'all') query.populate('owner', 'name email');
 
     const [notes, total] = await Promise.all([
       query.lean(),
-      filter.owner ? this.noteModel.countDocuments(filter) : this.noteModel.estimatedDocumentCount(),
+      scope === 'all' ? this.noteModel.estimatedDocumentCount() : this.noteModel.countDocuments(filter),
     ]);
     return paginate(notes, total, { page, limit });
   }
