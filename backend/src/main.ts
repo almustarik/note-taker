@@ -4,11 +4,13 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
 import helmet from 'helmet';
+import { MongoExceptionFilter } from './common/mongo-exception.filter.js';
 import { AppModule } from './app.module.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  app.enableShutdownHooks();
   app.use(
     helmet({
       contentSecurityPolicy: false,
@@ -16,8 +18,9 @@ async function bootstrap() {
     }),
   );
   app.enableCors({ origin: process.env.FRONTEND_URL ?? 'http://localhost:5173' });
-  app.setGlobalPrefix('api', { exclude: ['docs', 'docs/swagger'] });
+  app.setGlobalPrefix('api', { exclude: ['docs', 'docs/swagger', 'health'] });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+  app.useGlobalFilters(new MongoExceptionFilter());
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Secure Notes API')
