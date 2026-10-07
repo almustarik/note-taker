@@ -11,6 +11,9 @@ export class Note {
 
   @Prop({ default: '' })
   content: string;
+
+  @Prop({ default: false })
+  completed: boolean;
 }
 
 export const NoteSchema = SchemaFactory.createForClass(Note);

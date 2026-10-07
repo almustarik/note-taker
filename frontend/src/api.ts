@@ -14,6 +14,7 @@ export interface Note {
   _id: string;
   title: string;
   content: string;
+  completed?: boolean;
   owner: string | { _id: string; name: string; email: string };
   updatedAt: string;
 }

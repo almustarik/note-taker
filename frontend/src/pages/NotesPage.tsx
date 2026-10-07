@@ -57,6 +57,14 @@ export default function NotesPage({ user: currentUser }: NotesPageProps) {
     });
   }
 
+  function handleToggleNoteCompletion(targetNote: Note) {
+    executeNoteMutationTask(async () => {
+      await api.patch(`/notes/${targetNote._id}`, {
+        completed: !targetNote.completed,
+      });
+    });
+  }
+
   const [editingNoteContent, setEditingNoteContent] = useState<string>('');
 
   const extractNoteOwnerId = (note: Note) => (typeof note.owner === 'string' ? note.owner : note.owner._id);
@@ -168,7 +176,34 @@ export default function NotesPage({ user: currentUser }: NotesPageProps) {
                   {extractNoteOwnerName(note)}
                 </div>
               )}
-              <h3>{note.title}</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem' }}>
+                {isCurrentUserNoteOwner && (
+                  <input
+                    type="checkbox"
+                    checked={Boolean(note.completed)}
+                    onChange={() => handleToggleNoteCompletion(note)}
+                    title={note.completed ? 'Mark as incomplete' : 'Mark as completed'}
+                    style={{ cursor: 'pointer', width: '1.15rem', height: '1.15rem', accentColor: '#2563eb' }}
+                  />
+                )}
+                <h3
+                  style={{
+                    margin: 0,
+                    textDecoration: note.completed ? 'line-through' : 'none',
+                    opacity: note.completed ? 0.65 : 1,
+                  }}
+                >
+                  {note.title}
+                </h3>
+                {note.completed && (
+                  <span
+                    className="pill"
+                    style={{ marginLeft: 'auto', fontSize: '0.75rem', background: '#dcfce7', color: '#15803d' }}
+                  >
+                    Done
+                  </span>
+                )}
+              </div>
               {note.content && <p className="prose">{note.content}</p>}
               <div className="sheet-foot">
                 <span className="muted small">{formatDisplayDate(note.updatedAt)}</span>
