@@ -33,6 +33,7 @@ async function bootstrap() {
   SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config), {
     swaggerOptions: { persistAuthorization: true },
   });
+  app.getHttpAdapter().get('/', (_req: Request, res: Response) => res.redirect('/docs'));
 
   await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
 }

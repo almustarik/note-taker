@@ -33,7 +33,7 @@ cd backend
 npm test
 ```
 
-Interactive API docs (Swagger) are at http://localhost:3000/docs, and live at https://note-taker-backend-uz3g.onrender.com/docs. Log in with `POST /api/auth/login`, click **Authorize** and paste the token.
+Interactive API docs (Swagger) are at http://localhost:3000/docs, and live at https://note-taker-backend-uz3g.onrender.com/docs (the API root redirects there). Log in with `POST /api/auth/login`, click **Authorize** and paste the token.
 
 Frontend (http://localhost:5173):
 
