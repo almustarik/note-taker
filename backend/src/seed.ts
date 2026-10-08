@@ -4,6 +4,7 @@ import { getModelToken } from '@nestjs/mongoose';
 import bcrypt from 'bcryptjs';
 import { Model, Types } from 'mongoose';
 import { AppModule } from './app.module.js';
+import { BCRYPT_ROUNDS } from './common/password.js';
 import { Role } from './common/role.enum.js';
 import { Note } from './schemas/note.schema.js';
 import { Post } from './schemas/post.schema.js';
@@ -22,7 +23,7 @@ if (!(await userModel.exists({ email: adminEmail }))) {
   await userModel.create({
     name: 'Admin',
     email: adminEmail,
-    password: await bcrypt.hash(adminPassword, 10),
+    password: await bcrypt.hash(adminPassword, BCRYPT_ROUNDS),
     role: Role.Admin,
   });
   console.log(`Admin created: ${adminEmail}`);
@@ -44,7 +45,7 @@ function stamp(daysAgo: number) {
   return { _id, createdAt: date, updatedAt: date };
 }
 
-const password = await bcrypt.hash('Password123', 10);
+const password = await bcrypt.hash('Password123', BCRYPT_ROUNDS);
 const users = [];
 const notes = [];
 const posts = [];
