@@ -1,10 +1,11 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcryptjs';
+import { BCRYPT_ROUNDS } from '../common/password.js';
 import { UsersService } from '../users/users.service.js';
 import { LoginDto, RegisterDto } from './dto/auth.dto.js';
 
-const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10);
+const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', BCRYPT_ROUNDS);
 
 @Injectable()
 export class AuthService {
