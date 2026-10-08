@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import bcrypt from 'bcryptjs';
 import { Model, PipelineStage, Types } from 'mongoose';
 import { paginate, PaginationDto } from '../common/pagination.js';
+import { BCRYPT_ROUNDS } from '../common/password.js';
 import { AuthUser } from '../common/role.enum.js';
 import { Note } from '../schemas/note.schema.js';
 import { Post } from '../schemas/post.schema.js';
@@ -21,7 +22,7 @@ export class UsersService {
     if (await this.userModel.exists({ email: dto.email })) {
       throw new ConflictException('Email already in use');
     }
-    const password = await bcrypt.hash(dto.password, 10);
+    const password = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
     return this.userModel.create({ ...dto, password });
   }
 
@@ -57,7 +58,7 @@ export class UsersService {
       throw new ConflictException('Email already in use');
     }
     const changes: Partial<User> = { ...dto };
-    if (dto.password) changes.password = await bcrypt.hash(dto.password, 10);
+    if (dto.password) changes.password = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
 
     const user = await this.userModel.findByIdAndUpdate(id, changes, { returnDocument: 'after' }).lean();
     if (!user) throw new NotFoundException('User not found');
