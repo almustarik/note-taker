@@ -26,6 +26,13 @@ npm run seed                # admin@example.com / Admin12345 + a few demo users 
 npm start
 ```
 
+Tests (end-to-end against an in-memory MongoDB: auth, roles, pagination, both aggregations and the index plans):
+
+```bash
+cd backend
+npm test
+```
+
 Interactive API docs (Swagger) are at http://localhost:3000/docs, and live at https://note-taker-backend-uz3g.onrender.com/docs. Log in with `POST /api/auth/login`, click **Authorize** and paste the token.
 
 Frontend (http://localhost:5173):
