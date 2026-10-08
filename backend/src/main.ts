@@ -1,11 +1,10 @@
 import 'reflect-metadata';
-import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { AppModule } from './app.module.js';
-import { MongoExceptionFilter } from './common/mongo-exception.filter.js';
+import { configureApp } from './setup.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -22,9 +21,7 @@ async function bootstrap() {
     origin: frontendUrl ? (frontendUrl === '*' ? true : frontendUrl.split(',').map((s) => s.trim())) : true,
     credentials: true,
   });
-  app.setGlobalPrefix('api');
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
-  app.useGlobalFilters(new MongoExceptionFilter());
+  configureApp(app);
 
   const config = new DocumentBuilder()
     .setTitle('Notes API')
