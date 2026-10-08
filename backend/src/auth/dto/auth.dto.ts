@@ -1,5 +1,6 @@
 import { Transform } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsStrongPassword } from '../../common/password.js';
 import { toInterests, toLower } from '../../common/transforms.js';
 
 export class RegisterDto {
@@ -13,9 +14,7 @@ export class RegisterDto {
   @MaxLength(254)
   email: string;
 
-  @IsString()
-  @MinLength(8)
-  @MaxLength(72)
+  @IsStrongPassword()
   password: string;
 
   @IsOptional()
